@@ -1,0 +1,6 @@
+@OrderWaveAPI_HostAddress = http://localhost:5070
+
+GET {{OrderWaveAPI_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
