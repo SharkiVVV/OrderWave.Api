@@ -522,8 +522,8 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.TableId).HasColumnName("table_id");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
 
-            entity.HasOne(d => d.Table).WithOne(p => p.TableSession)
-                .HasForeignKey<TableSession>(d => d.TableId)
+            entity.HasOne(d => d.Table).WithMany(p => p.TableSessions)
+                .HasForeignKey(d => d.TableId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("fk_sessions_table");
         });
