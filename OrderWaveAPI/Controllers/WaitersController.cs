@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
@@ -11,6 +12,7 @@ namespace OrderWaveAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class WaitersController : ControllerBase
     {
         private readonly AppDbContext _dbContext;
@@ -63,6 +65,35 @@ namespace OrderWaveAPI.Controllers
             
             
             return Ok(response);
+        }
+
+        [HttpGet("me")]
+        public async Task<IActionResult> GetMe()
+        {
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!int.TryParse(userIdStr, out var userId))
+            {
+                return Unauthorized();
+            }
+            
+            var waiter = await _dbContext.Waiters
+                .Include(w => w.WaitersShifts)
+                .FirstOrDefaultAsync(w => w.UserId == userId);
+
+            if (waiter is null)
+            {
+                return NotFound(new {message = "Waiter not found"});
+                
+            }
+
+            var activeShift = waiter.WaitersShifts.FirstOrDefault(s => s.ShiftEnd == null);
+
+            return Ok(new
+            {
+                waiterId = waiter.WaiterId,
+                shiftId = activeShift?.ShiftId,
+                isOnShift = activeShift != null
+            });
         }
 
         [HttpGet("{id}")]

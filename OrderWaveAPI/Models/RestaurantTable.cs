@@ -17,5 +17,5 @@ public partial class RestaurantTable
 
     public DateTime? UpdatedAt { get; set; }
 
-    public virtual TableSession? TableSession { get; set; }
+    public virtual ICollection<TableSession> TableSessions{ get; set; }= new List<TableSession>();
 }

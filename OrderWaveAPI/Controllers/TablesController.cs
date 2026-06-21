@@ -13,6 +13,7 @@ namespace OrderWaveAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class TablesController : ControllerBase
     {
         private readonly AppDbContext _dbContext;
@@ -26,14 +27,14 @@ namespace OrderWaveAPI.Controllers
         public async Task<IActionResult> GetAll()
         {
             var tables = await _dbContext.RestaurantTables
-                .Include(t => t.TableSession)
+                .Include(t => t.TableSessions)
                 .ThenInclude(s => s!.Orders)
                 .ThenInclude(o => o.OrderDetails)
                 .OrderBy(t => t.TableNumber)
                 .ToListAsync();
             var response = tables.Select(t =>
             {
-                var session = t.TableSession?.IsActive == true ? t.TableSession : null;
+                var session = t.TableSessions.FirstOrDefault(s=>s.IsActive);
                 var total = session?.Orders
                     .Where(o => o.CurrentStatus != "Cancelled")
                     .SelectMany(o => o.OrderDetails)
@@ -57,7 +58,7 @@ namespace OrderWaveAPI.Controllers
         public async Task<IActionResult> GetById(int id)
         {
             var table = await _dbContext.RestaurantTables
-                .Include(t => t.TableSession)
+                .Include(t => t.TableSessions)
                 .ThenInclude(s => s!.TableAssignments)
                 .ThenInclude(a => a.Waiter)
                 .ThenInclude(w => w.User)
@@ -67,7 +68,7 @@ namespace OrderWaveAPI.Controllers
             {
                 return NotFound(new {message = "Table not found"});
             }
-            var session = table.TableSession;
+            var session = table.TableSessions.FirstOrDefault(s => s.IsActive);
 
             return Ok(new TableResponse
             {
@@ -138,7 +139,7 @@ namespace OrderWaveAPI.Controllers
         public async Task<IActionResult> OpenSession(int id, [FromBody] OpenSessionRequest request)
         {
             var table = await _dbContext.RestaurantTables
-                .Include(t => t.TableSession)
+                .Include(t => t.TableSessions)
                 .FirstOrDefaultAsync(t => t.TableId == id);
 
             if (table is null)
@@ -151,8 +152,8 @@ namespace OrderWaveAPI.Controllers
                 return BadRequest(new {message = "Table is not active"});
             }
             
-            var activeSession = await _dbContext.TableSessions
-                .AnyAsync(s => s.TableId == id && s.IsActive);
+            var activeSession = table.TableSessions
+                .Any(s => s.IsActive);
 
             if (activeSession)
             {
@@ -212,7 +213,7 @@ namespace OrderWaveAPI.Controllers
             {
                 SessionId = session.SessionId,
                 TableId =  session.Table.TableId,
-                IsActive = session.Table.IsActive,
+                IsActive = session.IsActive,
                 GuestsAmout = session.GuestsAmount,
                 OpenedAt = session.OpenedAt,
                 ClosedAt = session.ClosedAt,
@@ -246,19 +247,15 @@ namespace OrderWaveAPI.Controllers
                 .AnyAsync(o => o.SessionId == sessionId && 
                                (o.CurrentStatus == "Pending"|| 
                                 o.CurrentStatus == "In_Progress"));
-            if (!hasActiveOrder)
-            {
-                return BadRequest(new {message = "Session with this order not found"});
-            }
+
 
             if (hasActiveOrder)
             {
                 return BadRequest(new {message = "Session has active order"});
-                
-                
             }
             
             session.IsActive = false;
+            
             session.ClosedAt = DateTime.UtcNow;
             
             await _dbContext.SaveChangesAsync();
