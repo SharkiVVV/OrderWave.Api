@@ -30,7 +30,6 @@ namespace OrderWaveAPI.Controllers
             _tokenService = tokenService;
         }
         
-        // POST api/<AuthorizationController>
         [HttpPost("init")]
         [AllowAnonymous]
         public async Task<IActionResult> Initialize([FromBody] RegisterRequest request)
@@ -75,36 +74,43 @@ namespace OrderWaveAPI.Controllers
 
         }
 
-        // POST api/<AuthorizationController>
+
         [HttpPost("login")]
         [AllowAnonymous] 
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
             var user = await _dbContext.Users
                 .Include(u => u.UserRoles)
-                    .ThenInclude(ur => ur.Role)
-                .FirstOrDefaultAsync(u=> u.UserLogin == request.Login);
+                .ThenInclude(ur => ur.Role)
+                .FirstOrDefaultAsync(u => u.UserLogin == request.Login);
             if (user is null)
-            {
                 return Unauthorized(new { message = "Username or password is incorrect" });
-                
-            }
 
             if (!user.IsActive)
-            {
                 return Unauthorized(new { message = "Account is not active" });
-                
-                
-            }
 
-            if (!_passwordService.Verify(request.Password, user.UserPassword))
-            {
+            var verifyResult = _passwordService.Verify(request.Password, user.UserPassword);
+            if (!verifyResult)
                 return Unauthorized(new { message = "Incorrect password or login" });
-                
-                
-            }
-
+            
             var role = user.UserRoles.FirstOrDefault()?.Role.RoleName ?? "Waiter";
+
+            if (role == "Admin")
+            {
+                var waiterExists = await _dbContext.Waiters.AnyAsync(w => w.UserId == user.UserId);
+                if (!waiterExists)
+                {
+                    var waiter = new Waiter
+                    {
+                        UserId = user.UserId,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    _dbContext.Waiters.Add(waiter);
+                    await _dbContext.SaveChangesAsync();
+                }
+            }
+            
+            
             
             var token = _tokenService.GenerateToken(user.UserId, user.UserLogin, role);
             
